@@ -22,7 +22,7 @@
 #include "dsi_pwr.h"
 #include "dsi_parser.h"
 #include "msm_drv.h"
-#include "../../../../../../kernel_platform/msm-kernel/drivers/input/touchscreen/nt36532_spi/dsi_touch_gesture.h"
+#include "nt36532_spi/dsi_touch_gesture.h"
 #include "mi_dsi_panel.h"
 
 #define MAX_BL_LEVEL 4096
