@@ -207,6 +207,7 @@ struct dsi_display {
 	const char *display_type;
 	struct list_head list;
 	bool is_cont_splash_enabled;
+	bool splash_timing_db_pending;
 	bool sw_te_using_wd;
 	struct mutex display_lock;
 	int disp_te_gpio;

@@ -117,6 +117,14 @@ struct sde_hw_intf_ops {
 	u32 (*get_line_count)(struct sde_hw_intf *intf);
 	u32 (*get_underrun_line_count)(struct sde_hw_intf *intf);
 
+	/**
+	 * returns the vertical total (lines per frame) currently programmed
+	 * in the timing generator, 0 if it cannot be determined. Used to
+	 * detect a bootloader (cont. splash) timing that differs from the
+	 * mode the kernel is handing off to.
+	 */
+	u32 (*get_vtotal)(struct sde_hw_intf *intf);
+
 	void (*setup_vsync_source)(struct sde_hw_intf *intf, u32 frame_rate);
 
 	void (*bind_pingpong_blk)(struct sde_hw_intf *intf,

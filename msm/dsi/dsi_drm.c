@@ -1377,6 +1377,25 @@ int dsi_conn_post_kickoff(struct drm_connector *connector,
 		c_bridge->dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_VRR;
 	}
 
+	if (display->splash_timing_db_pending) {
+		display->splash_timing_db_pending = false;
+		display_for_each_ctrl(i, display) {
+			ctrl = &display->ctrl[i];
+			if (!ctrl->ctrl)
+				continue;
+			rc = dsi_ctrl_timing_db_update(ctrl->ctrl, false);
+			if (rc)
+				DSI_ERR("[%s] splash timing db update failed rc=%d\n",
+					display->name, rc);
+		}
+
+		/* panel-side pen scan rate follows the refresh rate */
+		mutex_lock(&display->panel->panel_lock);
+		mi_dsi_panel_match_fps_pen_setting(display->panel,
+				display->panel->cur_mode);
+		mutex_unlock(&display->panel->panel_lock);
+	}
+
 	/* ensure dynamic clk switch flag is reset */
 	c_bridge->dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_DYN_CLK;
 

@@ -341,6 +341,7 @@ struct sde_encoder_phys {
 	struct sde_encoder_irq irq[INTR_IDX_MAX];
 	bool has_intf_te;
 	bool cont_splash_enabled;
+	bool splash_timing_update;
 	bool in_clone_mode;
 	int vfp_cached;
 	enum frame_trigger_mode_type frame_trigger_mode;

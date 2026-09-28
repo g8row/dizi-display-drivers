@@ -457,10 +457,38 @@ static void sde_encoder_phys_vid_setup_timing_engine(
 
 	vid_enc->timing_params = timing_params;
 
+	phys_enc->splash_timing_update = false;
 	if (phys_enc->cont_splash_enabled) {
-		SDE_DEBUG_VIDENC(vid_enc,
-			"skipping intf programming since cont splash is enabled\n");
-		goto exit;
+		u32 hw_vtotal = 0, vtotal;
+
+		/*
+		 * The bootloader may run the panel at a different refresh rate
+		 * than the (preferred) mode being handed off to, e.g. 60 Hz
+		 * vs 120 Hz on a dfps_immediate_porch_mode_vfp panel. The
+		 * mode then "matches" in software and is never programmed,
+		 * so the panel stays at the bootloader rate until the next
+		 * real mode switch. If only the vertical total differs,
+		 * program the new timing now, like a seamless VRR switch.
+		 */
+		vtotal = timing_params.vsync_pulse_width +
+			timing_params.v_back_porch + timing_params.height +
+			timing_params.v_front_porch;
+		if (phys_enc->hw_intf->ops.get_vtotal)
+			hw_vtotal = phys_enc->hw_intf->ops.get_vtotal(
+					phys_enc->hw_intf);
+
+		if (!hw_vtotal || hw_vtotal == vtotal) {
+			SDE_DEBUG_VIDENC(vid_enc,
+				"skipping intf programming since cont splash is enabled\n");
+			goto exit;
+		}
+
+		SDE_INFO("intf %d: splash vtotal %u != mode vtotal %u (%d Hz), reprogramming timing\n",
+			phys_enc->hw_intf->idx - INTF_0, hw_vtotal, vtotal,
+			drm_mode_vrefresh(&mode));
+		SDE_EVT32(DRMID(phys_enc->parent), hw_vtotal, vtotal,
+			SDE_EVTLOG_FUNC_CASE1);
+		phys_enc->splash_timing_update = true;
 	}
 
 	fmt = sde_get_sde_format(fmt_fourcc);
@@ -833,7 +861,7 @@ static void sde_encoder_phys_vid_enable(struct sde_encoder_phys *phys_enc)
 	 * skip flushing intf during cont. splash handoff since bootloader
 	 * has already enabled the hardware and is single buffered.
 	 */
-	if (phys_enc->cont_splash_enabled) {
+	if (phys_enc->cont_splash_enabled && !phys_enc->splash_timing_update) {
 		SDE_DEBUG_VIDENC(vid_enc,
 		"skipping intf flush bit set as cont. splash is enabled\n");
 		goto skip_flush;

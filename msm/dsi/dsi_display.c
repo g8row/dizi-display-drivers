@@ -16,6 +16,8 @@
 #include "dsi_panel.h"
 #include "dsi_ctrl.h"
 #include "dsi_ctrl_hw.h"
+#include "dsi_ctrl_reg.h"
+#include "dsi_hw.h"
 #include "dsi_drm.h"
 #include "dsi_clk.h"
 #include "dsi_pwr.h"
@@ -8632,6 +8634,63 @@ wait_failure:
 	return rc;
 }
 
+/*
+ * dsi_display_splash_timing_fixup() - program the handoff mode's timing
+ * @display:    Pointer to dsi display
+ *
+ * With continuous splash the bootloader has already programmed the DSI
+ * host, and dsi_display_enable() skips all host/panel programming. If the
+ * bootloader ran the video mode timing at a different refresh rate (only
+ * the vertical front porch differs on dfps_immediate_porch_mode_vfp
+ * panels), the kernel's cur_mode would silently disagree with the hardware
+ * until the next mode switch. Update the host timing the same way a
+ * seamless DFPS switch does; the timing DB is released in
+ * dsi_conn_prepare_commit() together with the SDE INTF flush.
+ * Must be called with the video engine already marked on.
+ */
+static void dsi_display_splash_timing_fixup(struct dsi_display *display)
+{
+	struct dsi_display_mode *mode = display->panel->cur_mode;
+	struct dsi_display_ctrl *ctrl;
+	struct dsi_mode_info *t;
+	u32 reg, hw_vtotal, vtotal;
+	int i, rc;
+
+	if (!mode || display->config.panel_mode != DSI_OP_VIDEO_MODE ||
+	    !display->panel->dfps_caps.dfps_support ||
+	    display->panel->dfps_caps.type != DSI_DFPS_IMMEDIATE_VFP)
+		return;
+
+	ctrl = &display->ctrl[display->clk_master_idx];
+	if (!ctrl->ctrl)
+		return;
+
+	t = &mode->timing;
+	reg = DSI_R32(&ctrl->ctrl->hw, DSI_VIDEO_MODE_TOTAL);
+	hw_vtotal = ((reg >> 16) & 0xFFFF) + 1;
+	vtotal = t->v_sync_width + t->v_back_porch + t->v_active +
+		t->v_front_porch;
+	if (!reg || hw_vtotal == vtotal)
+		return;
+
+	DSI_INFO("[%s] splash vtotal %u != mode vtotal %u (%u Hz), updating host timing\n",
+		display->name, hw_vtotal, vtotal, t->refresh_rate);
+	SDE_EVT32(hw_vtotal, vtotal, t->refresh_rate, SDE_EVTLOG_FUNC_CASE1);
+
+	display_for_each_ctrl(i, display) {
+		ctrl = &display->ctrl[i];
+		if (!ctrl->ctrl)
+			continue;
+		rc = dsi_ctrl_async_timing_update(ctrl->ctrl, t);
+		if (rc) {
+			DSI_ERR("[%s] splash timing update failed on ctrl %d, rc=%d\n",
+				display->name, i, rc);
+			return;
+		}
+	}
+	display->splash_timing_db_pending = true;
+}
+
 int dsi_display_config_ctrl_for_cont_splash(struct dsi_display *display)
 {
 	int rc = 0;
@@ -8727,6 +8786,9 @@ int dsi_display_enable(struct dsi_display *display)
 	if (is_skip_op_required(display)) {
 
 		dsi_display_config_ctrl_for_cont_splash(display);
+
+		if (display->is_cont_splash_enabled)
+			dsi_display_splash_timing_fixup(display);
 
 		rc = dsi_display_splash_res_cleanup(display);
 		if (rc) {

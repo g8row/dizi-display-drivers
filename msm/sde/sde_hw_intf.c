@@ -602,6 +602,21 @@ static u32 sde_hw_intf_get_line_count(struct sde_hw_intf *intf)
 	return SDE_REG_READ(c, INTF_LINE_COUNT) & 0xffff;
 }
 
+static u32 sde_hw_intf_get_vtotal(struct sde_hw_intf *intf)
+{
+	struct sde_hw_blk_reg_map *c;
+	u32 hsync_period, vsync_period_f0;
+
+	if (!intf)
+		return 0;
+
+	c = &intf->hw;
+	hsync_period = SDE_REG_READ(c, INTF_HSYNC_CTL) >> 16;
+	vsync_period_f0 = SDE_REG_READ(c, INTF_VSYNC_PERIOD_F0);
+
+	return hsync_period ? vsync_period_f0 / hsync_period : 0;
+}
+
 static u32 sde_hw_intf_get_underrun_line_count(struct sde_hw_intf *intf)
 {
 	struct sde_hw_blk_reg_map *c;
@@ -910,6 +925,7 @@ static void _setup_intf_ops(struct sde_hw_intf_ops *ops,
 	ops->setup_misr = sde_hw_intf_setup_misr;
 	ops->collect_misr = sde_hw_intf_collect_misr;
 	ops->get_line_count = sde_hw_intf_get_line_count;
+	ops->get_vtotal = sde_hw_intf_get_vtotal;
 	ops->get_underrun_line_count = sde_hw_intf_get_underrun_line_count;
 	ops->get_intr_status = sde_hw_intf_get_intr_status;
 	ops->avr_setup = sde_hw_intf_avr_setup;
